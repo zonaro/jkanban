@@ -11,13 +11,25 @@ Please try out the live [demo][1]!
 ## Install
 Clone the repo and use the javascript and the css files in the `dist` folder.
 
-You have to include
+You have to include one of the following (local or CDN):
 
-`<link rel="stylesheet" href="path/to/jkanban.min.css">`
+- Local (from the `dist/` folder):
 
-and
+  `<link rel="stylesheet" href="dist/jkanban.min.css">`
 
-`<script src="path/to/jkanban.min.js"></script>`
+  `<script src="dist/jkanban.min.js"></script>`
+
+- jsDelivr CDN (versioned — recommended):
+
+  `<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/riktar/jkanban@1.3.1/dist/jkanban.min.css">`
+
+  `<script src="https://cdn.jsdelivr.net/gh/riktar/jkanban@1.3.1/dist/jkanban.min.js"></script>`
+
+- jsDelivr CDN (latest/unversioned):
+
+  `<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/riktar/jkanban/dist/jkanban.min.css">`
+
+  `<script src="https://cdn.jsdelivr.net/gh/riktar/jkanban/dist/jkanban.min.js"></script>`
 
 in your page and you are done.
 
