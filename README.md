@@ -33,6 +33,7 @@ var kanban = new jKanban({
     widthBoard       : '250px',                                      // width of the board
     responsivePercentage: false,                                    // if it is true I use percentage in the width of the boards and it is not necessary gutter and widthBoard
     dragItems        : true,                                         // if false, all items are not draggable
+    nestedCards      : false,                                       // allow cards to contain child cards (opt-in)
     boards           : [],                                           // json of boards
     dragBoards       : true,                                         // the boards are draggable, if false only item can be dragged
     itemAddOptions: {
@@ -124,7 +125,7 @@ jKanban provides the easiest possible API to make your boards awesome!
 
 Method Name           | Arguments                        | Description
 ----------------------|----------------------------------|------------------------------------------------------------------------------------------------------------------------------
-`addElement`          | `boardID, element, position`     | Add `element` in the board with ID `boardID`, `element` is the standard format. If `position` is set, inserts at position starting from 0
+`addElement`          | `parentID, element, position`     | Add `element` into the board or parent card with ID `parentID` (when `nestedCards: true`, `parentID` may be a card id). If `position` is set, inserts at position starting from 0
 `addForm`             | `boardID, formItem`              | Add `formItem` as html element into the board with ID `boardID`
 `addBoards`           | `boards`                         | Add one or more boards in the kanban, `boards` are in the standard format
 `findElement`         | `id`                             | Find board's item by `id`
