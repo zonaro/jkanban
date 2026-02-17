@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>jKanban — Nested demo</title>
+    <link rel="stylesheet" href="../dist/jkanban.min.css" />
+    <style>
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+
+        #nestedKanban {
+            overflow-x: auto;
+            padding: 20px 0;
+        }
+
+        .controls {
+            margin-bottom: 12px;
+        }
+
+        .controls button {
+            margin-right: 8px;
+            margin-bottom: 8px;
+        }
+
+        pre#state {
+            background: #f5f6f7;
+            padding: 12px;
+            border-radius: 4px;
+            max-height: 240px;
+            overflow: auto;
+        }
+
+        .hint {
+            color: #666;
+            font-size: 13px;
+            margin-bottom: 6px;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>jKanban — Nested boards & nested cards demo</h2>
+    <p class="hint">This page demonstrates <strong>nestedCards</strong> only — boards remain top-level. Drag cards into
+        other cards (where allowed).</p>
+
+    <div class="controls">
+        <button id="addSubtask">Add subtask to <code>Task A1</code></button>
+        <button id="showState">Show internal boards JSON</button>
+        <button id="resetState">Reset demo</button>
+    </div>
+
+    <div id="nestedKanban"></div>
+
+    <h3>Internal state</h3>
+    <pre id="state">(click "Show internal boards JSON")</pre>
+
+    <script src="../dist/jkanban.js"></script>
+    <script>
+        function createDemoKanban() {
+            return new jKanban({
+                element: '#nestedKanban',
+                gutter: '10px',
+                widthBoard: '360px',
+                itemHandleOptions: { enabled: true },
+                nestedCards: true,
+                dropEl: function (el, target, source, sibling, newParentId, newParentPath) {
+                    console.log('card dropped into', newParentId, newParentPath)
+                },
+                dropBoard: function (el, target, source, sibling, newParentId, newParentPath) {
+                    console.log('board dropped into', newParentId, newParentPath)
+                },
+                boards: [
+                    {
+                        id: '_todo',
+                        title: 'To Do',
+                        item: [{ id: 'todo-1', title: 'Todo item 1' }]
+                    },
+                    {
+                        id: '_projects',
+                        title: 'Projects',
+                        item: [
+                            {
+                                id: 'task-A1',
+                                title: 'Task A1',
+                                children: [{ id: 'task-A1-1', title: 'Subtask A1.1' }]
+                            }
+                        ]
+                    },
+                    {
+                        id: '_done',
+                        title: 'Done',
+                        item: [{ title: 'Done 1' }]
+                    }
+                ]
+            })
+        }
+
+        var KanbanDemo = createDemoKanban()
+
+
+
+        document.getElementById('addSubtask').addEventListener('click', function () {
+            KanbanDemo.addElement('task-A1', { id: 'task-A1-2', title: 'New subtask (programmatic)' })
+        })
+
+        document.getElementById('showState').addEventListener('click', function () {
+            document.getElementById('state').textContent = JSON.stringify(KanbanDemo.options.boards, null, 2)
+        })
+
+        document.getElementById('resetState').addEventListener('click', function () {
+            document.getElementById('nestedKanban').innerHTML = ''
+            KanbanDemo = createDemoKanban()
+            document.getElementById('state').textContent = '(reset)'
+        })
+
+        // expose demo on window for manual console testing
+        window.KanbanDemo = KanbanDemo
+    </script>
+</body>
+
+</html>
