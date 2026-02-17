@@ -46,17 +46,18 @@ var dragula = require('dragula');
       boards: [],
       dragBoards: true,
       dragItems: true, //whether can drag cards or not, useful when set permissions on it.
+      nestedCards: false,  // enable card-to-card nesting (opt-in)
       itemAddOptions: __DEFAULT_ITEM_ADD_OPTIONS,
       itemHandleOptions: __DEFAULT_ITEM_HANDLE_OPTIONS,
-      dragEl: function (el, source) {},
-      dragendEl: function (el) {},
-      dropEl: function (el, target, source, sibling) {},
-      dragBoard: function (el, source) {},
-      dragendBoard: function (el) {},
-      dropBoard: function (el, target, source, sibling) {},
-      click: function (el) {},
-      context: function (el, e) {},
-      buttonClick: function (el, boardId) {},
+      dragEl: function (el, source) { },
+      dragendEl: function (el) { },
+      dropEl: function (el, target, source, sibling) { },
+      dragBoard: function (el, source) { },
+      dragendBoard: function (el) { },
+      dropBoard: function (el, target, source, sibling) { },
+      click: function (el) { },
+      context: function (el, e) { },
+      buttonClick: function (el, boardId) { },
       propagationHandlers: [],
     }
 
@@ -137,12 +138,14 @@ var dragula = require('dragula');
 
             self.options.dragEl(el, source)
 
-            var boardJSON = __findBoardJSON(source.parentNode.dataset.id)
-            if (boardJSON.dragTo !== undefined) {
+            var sourceBoardNode = source.closest('[data-id]')
+            var sourceBoardId = sourceBoardNode ? sourceBoardNode.dataset.id : null
+            var boardJSON = sourceBoardId ? __findBoardJSON(sourceBoardId) : null
+            if (boardJSON && boardJSON.dragTo !== undefined) {
               self.options.boards.map(function (board) {
                 if (
                   boardJSON.dragTo.indexOf(board.id) === -1 &&
-                  board.id !== source.parentNode.dataset.id
+                  board.id !== sourceBoardId
                 ) {
                   self.findBoard(board.id).classList.add('disabled-board')
                 }
@@ -160,23 +163,32 @@ var dragula = require('dragula');
           .on('drop', function (el, target, source, sibling) {
             self.enableAllBoards()
 
-            var boardJSON = __findBoardJSON(source.parentNode.dataset.id)
-            if (boardJSON.dragTo !== undefined) {
+            var sourceBoardNode = source.closest('[data-id]')
+            var sourceBoardId = sourceBoardNode ? sourceBoardNode.dataset.id : null
+            var boardJSON = sourceBoardId ? __findBoardJSON(sourceBoardId) : null
+            var targetBoardNode = target.closest('[data-id]')
+            var targetBoardId = targetBoardNode ? targetBoardNode.dataset.id : null
+            if (boardJSON && boardJSON.dragTo !== undefined) {
               if (
-                boardJSON.dragTo.indexOf(target.parentNode.dataset.id) === -1 &&
-                target.parentNode.dataset.id !== source.parentNode.dataset.id
+                boardJSON.dragTo.indexOf(targetBoardId) === -1 &&
+                targetBoardId !== sourceBoardId
               ) {
                 self.drake.cancel(true)
               }
             }
             if (el !== null) {
-              var result = self.options.dropEl(el, target, source, sibling)
+              // compute new parent board id/path for nested support
+              var newParentNode = target.closest('[data-id]')
+              var newParentId = newParentNode ? newParentNode.dataset.id : null
+              var newParentPath = newParentId ? [newParentId] : null
+
+              var result = self.options.dropEl(el, target, source, sibling, newParentId, newParentPath)
               if (result === false) {
                 self.drake.cancel(true)
               }
               el.classList.remove('is-moving')
               if (typeof el.dropfn === 'function')
-                el.dropfn(el, target, source, sibling)
+                el.dropfn(el, target, source, sibling, newParentId, newParentPath)
             }
           })
       }
@@ -191,14 +203,48 @@ var dragula = require('dragula');
       }
     }
 
-    this.addElement = function (boardID, element, position) {
-      if (typeof position === 'undefined') {
-        position = -1
+    this.addElement = function (parentID, element, position) {
+      // parentID may be a board id or a card id (for nested cards)
+      if (typeof position === 'undefined') position = -1
+
+      // prefer board container
+      var boardContainer = self.element.querySelector('[data-id="' + parentID + '"] .kanban-drag')
+      var targetContainer = boardContainer
+
+      // if not a board, maybe it's a card and nestedCards enabled
+      if (!targetContainer) {
+        var parentCard = self.element.querySelector('[data-eid="' + parentID + '"]')
+        if (parentCard && self.options.nestedCards) {
+          targetContainer = parentCard.querySelector('.kanban-item-children')
+          if (!targetContainer) {
+            // create children container inside the card
+            targetContainer = document.createElement('div')
+            targetContainer.classList.add('kanban-drag', 'kanban-item-children')
+            parentCard.appendChild(targetContainer)
+            self.boardContainer.push(targetContainer)
+            if (self.drake && Array.isArray(self.drake.containers)) {
+              self.drake.containers.push(targetContainer)
+            }
+            // add collapse control to the parent card
+            if (!parentCard.querySelector('.card-collapse-btn')) {
+              var cbtn = document.createElement('button')
+              cbtn.classList.add('card-collapse-btn')
+              cbtn.setAttribute('aria-expanded', 'true')
+              cbtn.innerHTML = '▾'
+              parentCard.appendChild(cbtn)
+              cbtn.addEventListener('click', function (e) {
+                e.stopPropagation()
+                parentCard.classList.toggle('collapsed')
+                this.setAttribute('aria-expanded', !parentCard.classList.contains('collapsed'))
+              })
+            }
+          }
+        }
       }
-      var board = self.element.querySelector(
-        '[data-id="' + boardID + '"] .kanban-drag'
-      )
-      var refElement = board.childNodes[position]
+
+      if (!targetContainer) return self
+
+      var refElement = targetContainer.childNodes[position]
       var nodeItem = document.createElement('div')
       nodeItem.classList.add('kanban-item')
       if (typeof element.id !== 'undefined' && element.id !== '') {
@@ -212,7 +258,7 @@ var dragula = require('dragula');
       nodeItem.innerHTML = __buildItemCard(element)
       //add function
       nodeItem.clickfn = element.click
-      nodeItem.contextfn = element.context;
+      nodeItem.contextfn = element.context
       nodeItem.dragfn = element.drag
       nodeItem.dragendfn = element.dragend
       nodeItem.dropfn = element.drop
@@ -222,7 +268,7 @@ var dragula = require('dragula');
       if (self.options.itemHandleOptions.enabled) {
         nodeItem.style.cursor = 'default'
       }
-      board.insertBefore(nodeItem, refElement)
+      targetContainer.insertBefore(nodeItem, refElement)
       return self
     }
 
@@ -300,6 +346,7 @@ var dragula = require('dragula');
         })
         headerBoard.innerHTML =
           '<div class="kanban-title-board">' + board.title + '</div>'
+
         //content board
         var contentBoard = document.createElement('main')
         contentBoard.classList.add('kanban-drag')
@@ -339,6 +386,25 @@ var dragula = require('dragula');
             nodeItem.style.cursor = 'default'
           }
           contentBoard.appendChild(nodeItem)
+
+          // nested cards initial rendering
+          if (self.options.nestedCards && Array.isArray(itemKanban.children) && itemKanban.children.length) {
+            var cardChildrenContainer = document.createElement('div')
+            cardChildrenContainer.classList.add('kanban-drag', 'kanban-item-children')
+            nodeItem.appendChild(cardChildrenContainer)
+            self.boardContainer.push(cardChildrenContainer)
+            for (var cc = 0; cc < itemKanban.children.length; cc++) {
+              var childItem = itemKanban.children[cc]
+              var childNodeItem = document.createElement('div')
+              childNodeItem.classList.add('kanban-item')
+              if (childItem.id) childNodeItem.dataset.eid = childItem.id
+              childNodeItem.innerHTML = __buildItemCard(childItem)
+              __appendCustomProperties(childNodeItem, childItem)
+              __onclickHandler(childNodeItem)
+              __onContextHandler(childNodeItem)
+              cardChildrenContainer.appendChild(childNodeItem)
+            }
+          }
         }
         //footer board
         var footerBoard = document.createElement('footer')
@@ -365,6 +431,8 @@ var dragula = require('dragula');
         boardNode.appendChild(footerBoard)
         //board add
         self.container.appendChild(boardNode)
+
+
       }
       return self
     }
@@ -374,14 +442,15 @@ var dragula = require('dragula');
       return el
     }
 
+
+
     this.getParentBoardID = function (el) {
       if (typeof el === 'string') {
         el = self.element.querySelector('[data-eid="' + el + '"]')
       }
-      if (el === null) {
-        return null
-      }
-      return el.parentNode.parentNode.dataset.id
+      if (!el) return null
+      var boardNode = el.closest('[data-id]')
+      return boardNode ? boardNode.dataset.id : null
     }
 
     this.moveElement = function (targetBoardID, elementID, element) {
@@ -462,10 +531,10 @@ var dragula = require('dragula');
     }
 
     // board button on click function
-    this.onButtonClick = function (el) {}
+    this.onButtonClick = function (el) { }
 
     //PRIVATE FUNCTION
-    function __extendDefaults (source, properties) {
+    function __extendDefaults(source, properties) {
       var property
       for (property in properties) {
         if (properties.hasOwnProperty(property)) {
@@ -475,7 +544,7 @@ var dragula = require('dragula');
       return source
     }
 
-    function __setBoard () {
+    function __setBoard() {
       self.element = document.querySelector(self.options.element)
       //create container
       var boardContainer = document.createElement('div')
@@ -508,7 +577,7 @@ var dragula = require('dragula');
       self.element.appendChild(self.container)
     }
 
-    function __onclickHandler (nodeItem, clickfn) {
+    function __onclickHandler(nodeItem, clickfn) {
       nodeItem.addEventListener('click', function (e) {
         if (!self.options.propagationHandlers.includes('click')) e.preventDefault()
         self.options.click(this)
@@ -518,11 +587,11 @@ var dragula = require('dragula');
 
     function __onContextHandler(nodeItem, contextfn) {
       if (nodeItem.addEventListener) {
-          nodeItem.addEventListener('contextmenu', function (e) {
-            if (!self.options.propagationHandlers.includes('context')) e.preventDefault()
-            self.options.context(this, e)
-            if (typeof this.contextfn === 'function') this.contextfn(this, e)
-          }, false)
+        nodeItem.addEventListener('contextmenu', function (e) {
+          if (!self.options.propagationHandlers.includes('context')) e.preventDefault()
+          self.options.context(this, e)
+          if (typeof this.contextfn === 'function') this.contextfn(this, e)
+        }, false)
       } else {
         nodeItem.attachEvent('oncontextmenu', function () {
           self.options.context(this)
@@ -530,9 +599,9 @@ var dragula = require('dragula');
           if (!self.options.propagationHandlers.includes('context')) window.event.returnValue = false
         })
       }
-  }
+    }
 
-    function __onButtonClickHandler (nodeItem, boardId) {
+    function __onButtonClickHandler(nodeItem, boardId) {
       nodeItem.addEventListener('click', function (e) {
         e.preventDefault()
         self.options.buttonClick(this, boardId)
@@ -541,7 +610,7 @@ var dragula = require('dragula');
       })
     }
 
-    function __findBoardJSON (id) {
+    function __findBoardJSON(id) {
       var el = []
       self.options.boards.map(function (board) {
         if (board.id === id) {
@@ -551,7 +620,7 @@ var dragula = require('dragula');
       return el[0]
     }
 
-    function __appendCustomProperties (element, parentObject) {
+    function __appendCustomProperties(element, parentObject) {
       for (var propertyName in parentObject) {
         if (self._disallowedItemProperties.indexOf(propertyName) > -1) {
           continue
@@ -564,7 +633,7 @@ var dragula = require('dragula');
       }
     }
 
-    function __updateBoardsOrder () {
+    function __updateBoardsOrder() {
       var index = 1
       for (var i = 0; i < self.container.childNodes.length; i++) {
         self.container.childNodes[i].dataset.order = index++
@@ -575,32 +644,31 @@ var dragula = require('dragula');
       var result = 'title' in item ? item.title : '';
 
       if (self.options.itemHandleOptions.enabled) {
-          if ((self.options.itemHandleOptions.customHandler || undefined) === undefined) {
-              var customCssHandler = self.options.itemHandleOptions.customCssHandler
-              var customCssIconHandler = self.options.itemHandleOptions.customCssIconHandler
-              var customItemLayout = self.options.itemHandleOptions.customItemLayout
-              if ((customCssHandler || undefined) === undefined) {
-                  customCssHandler = 'drag_handler';
-              }
-
-              if ((customCssIconHandler || undefined) === undefined) {
-                  customCssIconHandler = customCssHandler + '_icon';
-              }
-
-              if ((customItemLayout || undefined) === undefined) {
-                  customItemLayout = '';
-              }
-
-              result = '<div class=\'item_handle ' + customCssHandler + '\'><i class=\'item_handle ' + customCssIconHandler + '\'></i></div><div>' + result + '</div>'
-          } else {
-              result = '<div> ' + self.options.itemHandleOptions.customHandler.replace(/%([^%]+)%/g, function (match, key) 
-                      { return item[key] !== undefined ? item[key] : '' }) + ' </div>'
-              return result
+        if ((self.options.itemHandleOptions.customHandler || undefined) === undefined) {
+          var customCssHandler = self.options.itemHandleOptions.customCssHandler
+          var customCssIconHandler = self.options.itemHandleOptions.customCssIconHandler
+          var customItemLayout = self.options.itemHandleOptions.customItemLayout
+          if ((customCssHandler || undefined) === undefined) {
+            customCssHandler = 'drag_handler';
           }
+
+          if ((customCssIconHandler || undefined) === undefined) {
+            customCssIconHandler = customCssHandler + '_icon';
+          }
+
+          if ((customItemLayout || undefined) === undefined) {
+            customItemLayout = '';
+          }
+
+          result = '<div class=\'item_handle ' + customCssHandler + '\'><i class=\'item_handle ' + customCssIconHandler + '\'></i></div><div>' + result + '</div>'
+        } else {
+          result = '<div> ' + self.options.itemHandleOptions.customHandler.replace(/%([^%]+)%/g, function (match, key) { return item[key] !== undefined ? item[key] : '' }) + ' </div>'
+          return result
+        }
       }
 
       return result
-  }
+    }
 
     //init plugin
     this.init()

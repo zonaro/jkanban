@@ -46,4 +46,29 @@ describe('jKanban TestCase', () => {
         expect(sut.findBoard(boardName)).not.toBeUndefined()
         expect(sut.getBoardElements(boardName).length).toEqual(0)
     })
+
+
+
+    test('nestedCards initial rendering and addElement to card', () => {
+        const sut = makeSut({
+            nestedCards: true,
+            boards: [
+                {
+                    id: 'b1',
+                    item: [
+                        { id: 'card1', title: 'Card 1', children: [{ id: 'card1-1', title: 'Child card' }] }
+                    ]
+                }
+            ]
+        })
+
+        const childCard = sut.findElement('card1-1')
+        expect(childCard).not.toBeNull()
+        expect(childCard.parentNode.closest('[data-eid]').dataset.eid).toBe('card1')
+
+        sut.addElement('card1', { id: 'card1-2', title: 'New child' })
+        const added = sut.findElement('card1-2')
+        expect(added).not.toBeNull()
+        expect(sut.getParentBoardID('card1-2')).toBe('b1')
+    })
 });
